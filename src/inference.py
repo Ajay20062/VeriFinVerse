@@ -12,6 +12,18 @@ from src.preprocess import clean_for_tfidf
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def available_models() -> list[str]:
+    models = [
+        name
+        for name in ("logistic", "xgboost")
+        if (ROOT / "models" / f"{name}.joblib").is_file()
+    ]
+    finbert_path = ROOT / "models" / "finbert"
+    if (finbert_path / "training_config.json").is_file():
+        models.append("finbert")
+    return models
+
+
 @lru_cache(maxsize=3)
 def load_model(model_name: str):
     if model_name in {"logistic", "xgboost"}:

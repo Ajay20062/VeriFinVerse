@@ -2,8 +2,10 @@ __pycache__/
 .venv/
 *.py[cod]
 data/processed/*.csv
-data/*.sqlite3
 models/*
 !models/.gitkeep
 reports/*
 !reports/.gitkeep
+.env
+.env.*
+!.env.example

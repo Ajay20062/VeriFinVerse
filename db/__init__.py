@@ -1,1 +1,1 @@
-"""SQLite persistence for prediction history."""
+"""MySQL persistence for prediction history."""

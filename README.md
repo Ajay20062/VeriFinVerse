@@ -1,18 +1,23 @@
 # VeriFinVerse
 
-Explainable financial-news classification: article text in, REAL/FAKE class and
-confidence out, with SHAP word contributions. This is a research/demo classifier,
-not financial advice or an authoritative fact-checking service.
+Explainable financial-claim classification: claim text in, REAL/FAKE class and
+confidence out, with SHAP word contributions. This research/demo classifier
+learns from fact-checker claim verdicts; it does not verify complete articles,
+and is not financial advice or an authoritative fact-checking service.
 
 ## Dataset and labeling assumptions
 
-The primary training CSV must contain a financial-news text column and a
-human-provided binary fake/real label column. Use a finance-focused labeled
-fake/real dataset whose provenance and license you have checked. The project
-does not bundle or fabricate a dataset. The loader accepts column names and an
-explicit source-label mapping. Text values such as `REAL`, `FAKE`, `true`, and
-`false` are recognized; numeric labels must be mapped explicitly, for example
-`0=FAKE,1=REAL` only after checking the dataset's documentation.
+Training data comes from [Fin-Fact](https://github.com/IIT-DM/Fin-Fact), a
+finance-focused fact-checking dataset of claims/headlines, not complete news
+articles. Its official source contains `True`, `False`, and `NEI` labels.
+[`src/prepare_finfact.py`](src/prepare_finfact.py) downloads the official
+dataset, maps `True` to `REAL` and `False` to `FAKE`, and excludes `NEI`
+examples because this application is binary. Each exported row retains its
+original fact-check URL. See the [Fin-Fact license and attribution](data/raw/FINFACT_LICENSE.txt).
+The official GitHub repository says MIT; the Hugging Face dataset card metadata
+says Apache-2.0, so that discrepancy is disclosed here and in the attribution
+file. Do not interpret claim classification as verification of a full article
+or a current financial claim.
 
 FiQA and Financial PhraseBank provide sentiment or related financial language,
 not fake/real truth labels. This project intentionally does not relabel them.
@@ -36,11 +41,20 @@ using the official PyTorch installation selector, then install the remaining
 requirements. CPU is supported. First FinBERT run downloads
 `ProsusAI/finbert`, so internet access is required at that point.
 
-Start with the [raw CSV template](data/raw/financial_news_template.csv). Before
-preprocessing, populate it with one article per row and set `label` to a
-human-verified `REAL` or `FAKE` value; a headers-only file is not trainable.
-Keep the source dataset's provenance and license with your project records.
-Do not put FiQA/PhraseBank sentiment labels in the fake/real label column.
+To reproduce the labeled input CSV, run the preparation script:
+
+```powershell
+python -m src.prepare_finfact
+```
+
+It creates [data/raw/finfact_claims.csv](data/raw/finfact_claims.csv) with
+`article`, `label`, and `source_url` columns. The `article` column contains the
+dataset's claim/headline text for compatibility with the current text-model
+pipeline. The current source yields 2,763 binary examples after excluding 602
+`NEI` rows. The older
+[header-only template](data/raw/financial_news_template.csv) is for
+user-provided data; it is not training data. Do not put
+FiQA/PhraseBank sentiment labels in the fake/real label column.
 
 ## Preprocess
 
@@ -51,7 +65,7 @@ confirms the numeric label meanings.
 
 ```powershell
 python -m src.preprocess `
-  --input data/raw/financial_news_template.csv `
+  --input data/raw/finfact_claims.csv `
   --text-column article `
   --label-column label `
   --output-dir data/processed `
@@ -81,7 +95,7 @@ The [FinBERT training script](src/train_finbert.py) reads the same
 for your hardware:
 
 ```powershell
-python -m src.train_finbert --epochs 2 --max-length 128 --batch-size 8
+python -m src.train_finbert --epochs 1 --max-length 64 --batch-size 16 --seed 42
 ```
 
 Artifacts are written to `models/`. FinBERT automatically uses CUDA when
@@ -103,29 +117,55 @@ python -m src.evaluate --models logistic xgboost finbert --warmups 3 --latency-r
 Reports are saved to `reports/`: `metrics.csv`, `metrics.json`, one confusion
 matrix per model, and `f1_vs_latency.png` (F1/latency trade-off).
 
+On the fixed-seed split in this workspace (415 held-out test claims), the
+measured results were:
+
+| Model | Accuracy | F1 | ROC-AUC | Latency (ms/article) |
+|---|---:|---:|---:|---:|
+| Logistic Regression | 0.764 | 0.798 | 0.812 | 0.9 |
+| XGBoost | 0.716 | 0.770 | 0.740 | 3.3 |
+| FinBERT | 0.728 | 0.785 | 0.791 | 51.9 |
+
+Latency used one warmup and one timing repeat and varies by hardware. Logistic
+Regression is the current default because it had the best held-out F1 and lowest
+latency here. These are research results, not a measure of publisher-independent
+or real-world fact-checking accuracy.
+
 ## Run the application
 
-Start FastAPI (from this directory):
+Create a MySQL database before starting the API:
+
+```sql
+CREATE DATABASE verifinverse CHARACTER SET utf8mb4;
+```
+
+The configured MySQL user needs permission to create the predictions table and
+to select and insert prediction records.
+
+Set the connection settings in the same PowerShell terminal. Copy
+[`.env.example`](.env.example) as a reference, but keep real credentials in
+your local environment and out of source control:
+
+```powershell
+$env:MYSQL_HOST = "127.0.0.1"
+$env:MYSQL_PORT = "3306"
+$env:MYSQL_USER = "your_mysql_user"
+$env:MYSQL_PASSWORD = "your_mysql_password"
+$env:MYSQL_DATABASE = "verifinverse"
+```
+
+Start the Python API and static HTML/CSS/JavaScript frontend from the project
+root:
 
 ```powershell
 uvicorn api.main:app --reload
 ```
 
-`POST /predict` accepts `{"text":"...","model":"finbert"}`; model may be
-`finbert`, `logistic`, or `xgboost`. Response includes verdict, confidence,
-top signed SHAP signals, and prediction latency in milliseconds. First-time
-SHAP initialization may take a little while.
-
-In another terminal, with the same virtual environment active:
-
-```powershell
-streamlit run app/streamlit_app.py
-```
-
-The app includes article verification, confidence, SHAP highlights and bar
-chart, a SQLite-backed prediction history page, a recommendation to consult
-official sources such as SEBI/RBI, and a clear notice that source evidence
-cross-checking is planned future work.
+Open `http://127.0.0.1:8000` for the frontend or
+`http://127.0.0.1:8000/docs` for the API documentation. The interface discovers
+trained models through `GET /models`, sends claims to `POST /predict`, and shows
+the stored prediction history from `GET /history`. Predictions are stored in
+MySQL. The database table is created automatically when the API starts.
 
 ## Notes
 
@@ -133,6 +173,9 @@ cross-checking is planned future work.
 - Use a source-appropriate split or group by publisher/time if near-duplicate
   articles or source leakage are concerns; a random stratified split alone
   cannot guarantee independent sources.
+- This Fin-Fact export contains claims from Snopes and PolitiFact. The current
+  random stratified split includes both publishers in each partition, so test
+  scores do not demonstrate generalization to unseen publishers.
 - SHAP feature contributions explain model behavior, not factual verification.
 - XGBoost and SHAP performance can vary by platform and package version. FinBERT
   fine-tuning on CPU may be slow; reduce batch size or epochs for a laptop.

@@ -76,6 +76,7 @@ def main() -> None:
         num_labels=2,
         id2label=ID_TO_LABEL,
         label2id=LABEL_TO_ID,
+        ignore_mismatched_sizes=True,
     ).to(device)
     train_loader = DataLoader(
         ArticleDataset(train, tokenizer, args.max_length),
