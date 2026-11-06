@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0a1116">
+    <meta name="description" content="Review live financial news verification results from configured VeriFinVerse models.">
+    <title>VeriFinVerse — News intelligence</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="topbar">
+      <a class="brand" href="#dashboard" aria-label="VeriFinVerse home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="brand-name">VeriFin<span>Verse</span></span>
+      </a>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <a class="nav-link is-active" href="#dashboard">Dashboard</a>
+        <a class="nav-link" href="#verify">Verify news</a>
+        <a class="nav-link" href="#analysis-result">Analysis result</a>
+        <a class="nav-link" href="#history">History</a>
+        <a class="nav-link" href="#documentation">Documentation</a>
+      </nav>
+      <a class="api-indicator" href="#connection-settings" aria-label="Configure API connection">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <span id="connection-label">Connecting</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">
+        <span class="sr-only">Toggle navigation</span><span></span><span></span>
+      </button>
+    </header>
+    <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation" hidden>
+      <a href="#dashboard">Dashboard</a>
+      <a href="#verify">Verify news</a>
+      <a href="#analysis-result">Analysis result</a>
+      <a href="#history">History</a>
+      <a href="#documentation">Documentation</a>
+    </nav>
+
+    <main id="main-content">
+      <section class="intro section-wrap" id="dashboard" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> FINANCIAL NEWS INTELLIGENCE <span class="eyebrow-index">01 / OVERVIEW</span></div>
+          <h1 id="page-title">Signal over<br><em>speculation.</em></h1>
+          <p>Run a headline or article through the models your team has configured. Every result below comes directly from the verification service.</p>
+        </div>
+        <div class="intro-side">
+          <div class="signal-orbit" aria-hidden="true">
+            <div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div>
+            <div class="orbit-center"><span class="orbit-spark"></span><span class="orbit-tick"></span></div>
+            <span class="orbit-label label-top">MODEL SIGNAL</span><span class="orbit-label label-bottom">LIVE ANALYSIS</span>
+          </div>
+          <div class="intro-side-copy"><span class="side-label">THE VERIFICATION LOOP</span><span>Independent models.<br>One transparent signal.</span></div>
+        </div>
+      </section>
+
+      <section class="metrics section-wrap" aria-label="Analysis summary">
+        <article class="metric metric-total">
+          <div class="metric-heading"><span>ANALYSES IN HISTORY</span><span class="metric-symbol" aria-hidden="true">↗</span></div>
+          <p class="metric-value" id="metric-total">—</p>
+          <p class="metric-note">Records returned by the service</p>
+        </article>
+        <article class="metric">
+          <div class="metric-heading"><span>POTENTIALLY FAKE</span><span class="metric-symbol fake-symbol" aria-hidden="true">!</span></div>
+          <p class="metric-value" id="metric-fake">—</p>
+          <p class="metric-note">Classified as FAKE by the combined result</p>
+        </article>
+        <article class="metric">
+          <div class="metric-heading"><span>LIKELY CREDIBLE</span><span class="metric-symbol real-symbol" aria-hidden="true">✓</span></div>
+          <p class="metric-value" id="metric-real">—</p>
+          <p class="metric-note">Classified as REAL by the combined result</p>
+        </article>
+        <div class="metric-caption"><span class="caption-rule"></span><span>Live data only.<br>No sample predictions.</span></div>
+      </section>
+
+      <section class="workspace section-wrap" aria-label="Verification workspace">
+        <div class="main-column">
+          <section class="panel verify-panel" id="verify" aria-labelledby="verify-title">
+            <div class="panel-head">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> INPUT / VERIFY</div><h2 id="verify-title">Check a story</h2></div>
+              <span class="panel-index">01</span>
+            </div>
+            <p class="section-description">Paste a financial headline or article. Selected, available models will evaluate the same text independently.</p>
+            <form id="analysis-form">
+              <label class="field-label" for="news-text">HEADLINE OR ARTICLE</label>
+              <textarea id="news-text" name="text" rows="5" maxlength="20000" placeholder="Paste the financial news you want to verify…" required></textarea>
+              <div class="textarea-meta"><span>Text is sent to your configured local API.</span><span id="character-count">0 / 20,000</span></div>
+              <fieldset class="model-picker">
+                <legend class="field-label">MODELS TO INCLUDE</legend>
+                <div id="model-options" class="model-options"><p class="inline-status">Loading model availability…</p></div>
+              </fieldset>
+              <div class="form-actions">
+                <button class="button button-primary" type="submit" id="analyze-button"><span class="button-icon" aria-hidden="true">↗</span><span>Analyze story</span></button>
+                <span class="form-footnote">No result is shown until the API returns one.</span>
+              </div>
+              <div class="form-feedback" id="form-feedback" role="status" aria-live="polite" hidden></div>
+            </form>
+          </section>
+
+          <section class="panel result-panel" id="analysis-result" aria-labelledby="result-title">
+            <div class="panel-head">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> OUTPUT / EVIDENCE</div><h2 id="result-title">Analysis result</h2></div>
+              <span class="panel-index">02</span>
+            </div>
+            <div class="result-placeholder" id="result-content" aria-live="polite">
+              <span class="placeholder-icon" aria-hidden="true">◎</span>
+              <div><strong>Waiting for a live analysis</strong><p>Submit a story to see its combined classification, confidence, and model-level results here.</p></div>
+            </div>
+          </section>
+
+          <section class="panel history-panel" id="history" aria-labelledby="history-title">
+            <div class="panel-head history-head">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> ARCHIVE / RECENT</div><h2 id="history-title">Recent analyses</h2></div>
+              <button class="text-button" type="button" id="refresh-history">Refresh history <span aria-hidden="true">↻</span></button>
+            </div>
+            <div class="history-list" id="history-list" aria-live="polite">
+              <div class="history-empty"><span class="empty-glyph" aria-hidden="true">⌁</span><strong>Loading saved records</strong><p>History is fetched from the connected API.</p></div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side-column" aria-label="Service details and help">
+          <section class="panel model-panel" aria-labelledby="models-title">
+            <div class="panel-head compact-head"><div><div class="eyebrow"><span class="eyebrow-line"></span> SERVICE / STATUS</div><h2 id="models-title">Model availability</h2></div><span class="status-count" id="model-count">— / 3</span></div>
+            <p class="section-description">Availability is reported by <code>GET /api/models</code>.</p>
+            <div class="model-status-list" id="model-status-list"><p class="inline-status">Checking configured models…</p></div>
+            <div class="rail-note"><span class="rail-note-mark" aria-hidden="true">i</span><p>A model must be configured on the backend before it can return a prediction. This dashboard never substitutes demo output.</p></div>
+          </section>
+          <section class="panel connection-panel" id="connection-settings" aria-labelledby="connection-title">
+            <div class="panel-head compact-head"><div><div class="eyebrow"><span class="eyebrow-line"></span> CONFIGURATION</div><h2 id="connection-title">API connection</h2></div></div>
+            <form id="connection-form">
+              <label class="field-label" for="api-url">BACKEND BASE URL</label>
+              <div class="connection-input-row"><input id="api-url" name="api-url" type="url" autocomplete="url" spellcheck="false" required><button type="submit" class="button button-small">Save</button></div>
+              <p class="connection-help">Default: <code>http://localhost:8000</code>. Changes are saved in this browser.</p>
+              <div id="connection-feedback" class="connection-feedback" role="status" aria-live="polite"></div>
+            </form>
+          </section>
+          <section class="panel docs-panel" id="documentation" aria-labelledby="docs-title">
+            <div class="eyebrow"><span class="eyebrow-line"></span> FIELD NOTES / 03</div><h2 id="docs-title">How to read a signal</h2>
+            <div class="doc-item"><span class="doc-number">A</span><div><h3>Confidence</h3><p>When returned, confidence is the model's probability for its classification. It may be unavailable.</p></div></div>
+            <div class="doc-item"><span class="doc-number">B</span><div><h3>Combined result</h3><p>The API combines model labels by majority vote. A tie is returned as <code>UNCERTAIN</code>.</p></div></div>
+            <div class="doc-item"><span class="doc-number">C</span><div><h3>Model availability</h3><p>Only models configured with local artifacts can analyze text. An unavailable model is not a negative result.</p></div></div>
+            <a class="api-doc-link" href="#" id="api-doc-link" target="_blank" rel="noreferrer">Open API documentation <span aria-hidden="true">↗</span></a>
+          </section>
+        </aside>
+      </section>
+      <footer class="footer section-wrap"><span>VERIFINVERSE <span class="footer-separator">/</span> FINANCIAL NEWS VERIFICATION</span><a href="#dashboard">Back to overview ↑</a></footer>
+    </main>
+  </body>
+</html>
