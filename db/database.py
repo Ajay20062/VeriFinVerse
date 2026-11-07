@@ -1,18 +1,19 @@
-"""MySQL storage for prediction requests."""
+"""MySQL persistence for prediction history."""
 
 import os
 from datetime import datetime, timezone
 
 import mysql.connector
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def _connect():
     required = ("MYSQL_HOST", "MYSQL_USER", "MYSQL_DATABASE")
     missing = [name for name in required if not os.getenv(name)]
     if missing:
-        raise RuntimeError(
-            "Missing MySQL configuration: " + ", ".join(missing)
-        )
+        raise RuntimeError("Missing MySQL configuration: " + ", ".join(missing))
 
     try:
         port = int(os.getenv("MYSQL_PORT", "3306"))

@@ -59,7 +59,7 @@ class DatabaseTests(unittest.TestCase):
         statement, parameters = self.cursor.execute.call_args.args
         self.assertIn("VALUES (%s, %s, %s, %s, %s, %s)", statement)
         self.assertEqual(parameters[:5], ("claim", "REAL", 0.8, "logistic", 1.2))
-        self.assertEqual(parameters[5].tzinfo, None)
+        self.assertIsNone(parameters[5].tzinfo)
         self.connection.commit.assert_called_once()
 
     def test_reads_history_with_limit_parameter(self):

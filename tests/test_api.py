@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from api import main
 from api.main import app
 
 
@@ -19,8 +20,14 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("VeriFinVerse", response.text)
-        self.assertEqual(self.client.get("/styles.css").status_code, 200)
-        self.assertEqual(self.client.get("/app.js").status_code, 200)
+        self.assertIn('href="/static/styles.css"', response.text)
+        self.assertIn('src="/static/app.js"', response.text)
+        css = self.client.get("/static/styles.css")
+        javascript = self.client.get("/static/app.js")
+        self.assertEqual(css.status_code, 200)
+        self.assertIn("text/css", css.headers["content-type"])
+        self.assertEqual(javascript.status_code, 200)
+        self.assertIn("javascript", javascript.headers["content-type"])
         self.assertEqual(self.client.get("/docs").status_code, 200)
 
     def test_lists_trained_models(self):
@@ -29,6 +36,15 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"models": ["logistic"]})
+
+    def test_rejects_unavailable_model(self):
+        with patch("api.main.available_models", return_value=[]):
+            response = self.client.post(
+                "/predict",
+                json={"text": "A test financial claim", "model": "logistic"},
+            )
+
+        self.assertEqual(response.status_code, 503)
 
     def test_predict_uses_model_and_stores_history(self):
         result = {
@@ -61,6 +77,29 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"predictions": rows})
+
+    def test_history_rejects_invalid_limit(self):
+        response = self.client.get("/history?limit=101")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_history_returns_service_unavailable_when_mysql_is_unconfigured(self):
+        with patch("api.main.get_history", side_effect=RuntimeError("Missing MySQL configuration")):
+            response = self.client.get("/history?limit=5")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Missing MySQL configuration", response.json()["detail"])
+
+    def test_startup_keeps_web_app_available_when_mysql_is_unconfigured(self):
+        with patch(
+            "api.main.initialize_database",
+            side_effect=RuntimeError("Missing MySQL configuration"),
+        ), patch("api.main.logger.warning") as warning:
+            main.startup()
+            warning.assert_called_once()
+
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == "__main__":

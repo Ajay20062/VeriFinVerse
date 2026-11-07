@@ -19,16 +19,14 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
-async function requestJson(path, options) {
+async function requestJson(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    credentials: "same-origin",
     headers: {
       Accept: "application/json",
-      ...(options && options.headers),
+      ...options.headers,
     },
   });
-
   let body;
   try {
     body = await response.json();
@@ -37,7 +35,6 @@ async function requestJson(path, options) {
       ? "The server returned an unreadable response."
       : `Request failed (${response.status}).`);
   }
-
   if (!response.ok) {
     const detail = body && typeof body.detail === "string" ? body.detail : "";
     throw new Error(detail || `Request failed (${response.status}).`);
@@ -84,9 +81,8 @@ function renderPrediction(result) {
   document.querySelector("#confidence-fill").style.width = `${confidence * 100}%`;
   const confidenceTrack = document.querySelector("#confidence-track");
   confidenceTrack.setAttribute("aria-valuenow", String(Math.round(confidence * 100)));
-
-  const latency = finiteNumber(result.latency_ms);
-  document.querySelector("#latency").textContent = `${latency.toFixed(1)} ms`;
+  document.querySelector("#latency").textContent =
+    `${finiteNumber(result.latency_ms).toFixed(1)} ms`;
 
   const signals = document.querySelector("#signals");
   signals.replaceChildren();
@@ -102,7 +98,6 @@ function renderPrediction(result) {
     empty.textContent = "No word-level signals were returned.";
     signals.append(empty);
   }
-
   resultEmpty.hidden = true;
   resultContent.hidden = false;
 }
@@ -126,9 +121,21 @@ function formatTimestamp(value) {
     : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function setHistoryRow(message, className) {
+  const row = document.createElement("tr");
+  row.className = "history-state-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 5;
+  cell.className = className;
+  cell.textContent = message;
+  row.append(cell);
+  historyRows.replaceChildren(row);
+}
+
 async function loadHistory() {
   historyButton.disabled = true;
   setStatus(historyStatus, "Loading saved analyses…");
+  setHistoryRow("Loading saved analyses…", "history-loading");
   try {
     const body = await requestJson("/history?limit=20");
     const predictions = body && Array.isArray(body.predictions) ? body.predictions : [];
@@ -138,23 +145,33 @@ async function loadHistory() {
         continue;
       }
       const row = document.createElement("tr");
-      const confidence = formatConfidence(prediction.confidence);
       addHistoryCell(row, prediction.text, "claim-cell");
-      addHistoryCell(row, prediction.verdict, prediction.verdict === "REAL"
-        ? "table-verdict-real"
-        : prediction.verdict === "FAKE" ? "table-verdict-fake" : "");
-      addHistoryCell(row, confidence);
+      addHistoryCell(
+        row,
+        prediction.verdict,
+        prediction.verdict === "REAL"
+          ? "table-verdict-real"
+          : prediction.verdict === "FAKE" ? "table-verdict-fake" : "",
+      );
+      addHistoryCell(row, formatConfidence(prediction.confidence));
       addHistoryCell(row, prediction.model);
       addHistoryCell(row, formatTimestamp(prediction.created_at));
       historyRows.append(row);
     }
     const count = historyRows.childElementCount;
+    if (count === 0) {
+      setHistoryRow("No saved analyses yet. Your completed analyses will appear here.", "history-empty");
+    }
     setStatus(
       historyStatus,
-      count ? `${count} recent ${count === 1 ? "analysis" : "analyses"}` : "No saved analyses yet."
+      count ? `${count} recent ${count === 1 ? "analysis" : "analyses"}` : "No saved analyses yet.",
     );
   } catch (error) {
-    setStatus(historyStatus, errorMessage(error), true);
+    setHistoryRow(
+      "History is unavailable. Check your connection or try refreshing.",
+      "history-error",
+    );
+    setStatus(historyStatus, `Could not load history: ${errorMessage(error)}`, true);
   } finally {
     historyButton.disabled = false;
   }
@@ -167,7 +184,7 @@ async function loadModels() {
   try {
     const body = await requestJson("/models");
     const models = body && Array.isArray(body.models)
-      ? body.models.filter((model) => typeof model === "string" && model.length > 0)
+      ? body.models.filter((model) => ["logistic", "xgboost", "finbert"].includes(model))
       : [];
     modelSelect.replaceChildren();
     for (const model of models) {
@@ -200,17 +217,12 @@ form.addEventListener("submit", async (event) => {
   }
 
   submitButton.disabled = true;
-  resultContent.hidden = true;
-  resultEmpty.hidden = false;
   setStatus(statusMessage, "Analyzing claim…");
   try {
     const result = await requestJson("/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: claimInput.value,
-        model: modelSelect.value,
-      }),
+      body: JSON.stringify({ text: claimInput.value, model: modelSelect.value }),
     });
     renderPrediction(result);
     setStatus(statusMessage, "Analysis saved.");

@@ -19,7 +19,20 @@ def available_models() -> list[str]:
         if (ROOT / "models" / f"{name}.joblib").is_file()
     ]
     finbert_path = ROOT / "models" / "finbert"
-    if (finbert_path / "training_config.json").is_file():
+    has_weights = any(
+        (finbert_path / filename).is_file()
+        for filename in ("model.safetensors", "pytorch_model.bin")
+    )
+    has_tokenizer = any(
+        (finbert_path / filename).is_file()
+        for filename in ("tokenizer.json", "vocab.txt")
+    )
+    if (
+        (finbert_path / "training_config.json").is_file()
+        and (finbert_path / "config.json").is_file()
+        and has_weights
+        and has_tokenizer
+    ):
         models.append("finbert")
     return models
 
