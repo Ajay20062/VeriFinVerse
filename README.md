@@ -1,158 +1,75 @@
 # VeriFinVerse
 
-Explainable financial-claim classification: claim/headline text in, REAL/FAKE
-class and confidence out, with SHAP word contributions. This research/demo
-classifier learns from fact-checker claim verdicts; it does not verify complete
-articles and is not financial advice or an authoritative fact-checking service.
+VeriFinVerse is an explainable, wording-based classifier for **short financial claims**. It learns from Fin-Fact fact-checker verdicts and returns a REAL/FAKE prediction, model confidence, class probabilities, and the TF-IDF features that influenced that prediction. It uses Flask, CSV files, and scikit-learn; it does not use a database, FastAPI, or a deep-learning framework.
 
-## Dataset and labeling assumptions
+> **Limitations:** This is a machine-learning classification demo, not fact verification. It does not verify full articles or current facts, is not financial advice, and is not an authoritative fact-checking service. Feature explanations describe the model's learned weights, not whether a claim is factually true. The model was trained on short claims and may not generalize to other writing styles or topics. Near-duplicate wording may remain across splits. Confidence near 50% means the model is unsure; confidence is not a guarantee of correctness.
 
-Training data comes from [Fin-Fact](https://github.com/IIT-DM/Fin-Fact), a
-finance-focused fact-checking dataset of claims/headlines, not complete news
-articles. Its official source contains `True`, `False`, and `NEI` labels.
-[`src/prepare_finfact.py`](src/prepare_finfact.py) downloads the official
-dataset, maps `True` to `REAL` and `False` to `FAKE`, and excludes `NEI`
-examples because this application is binary. Each exported row retains its
-original fact-check URL. See the [Fin-Fact license and attribution](data/raw/FINFACT_LICENSE.txt).
-The official GitHub repository says MIT; the Hugging Face dataset card metadata
-says Apache-2.0, so that discrepancy is disclosed here and in the attribution
-file. Do not interpret claim classification as verification of a full article
-or a current financial claim.
+## Dataset and license note
 
-FiQA and Financial PhraseBank provide sentiment or related financial language,
-not fake/real truth labels. This project intentionally does not relabel them.
-They can be used separately for vocabulary/EDA or a distinct sentiment task,
-but do not enter the fake/real supervised train/validation/test splits.
+The preparation script uses the official [Fin-Fact JSON dataset](https://raw.githubusercontent.com/IIT-DM/Fin-Fact/FinFact/finfact.json). Source `true` labels become REAL, `false` labels become FAKE, and `NEI` records are excluded. The fact-check URL is preserved as `source_url` in `data/raw/finfact_claims.csv`. FiQA and Financial PhraseBank are not used because they contain sentiment labels, not truth-verdict labels.
+
+There is a license discrepancy: the Fin-Fact GitHub repository states MIT, while its Hugging Face dataset card states Apache-2.0. Review the dataset source and applicable terms before redistribution or commercial use.
 
 ## Setup
 
-Run commands from this `verifinverse` directory. Python 3.10+ is recommended.
-Create and activate a virtual environment, then install dependencies:
+Use Python 3.10 or newer in a virtual environment:
 
-```powershell
-py -3.10 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-For the web application, copy `.env.example` to `.env` and set your MySQL
-connection values. Create the configured database/schema in MySQL before
-starting the API; on startup, the service creates its `predictions` table.
-The `.env` file is ignored by Git.
+## Build the dataset and models
 
-```powershell
-Copy-Item .env.example .env
-```
+Run these commands from the repository root:
 
-For the example configuration, create the database once in MySQL:
-
-```sql
-CREATE DATABASE verifinverse CHARACTER SET utf8mb4;
-```
-
-For GPU training, install the PyTorch build appropriate for your CUDA version
-using the official PyTorch installation selector, then install the remaining
-requirements. CPU is supported. First FinBERT run downloads
-`ProsusAI/finbert`, so internet access is required at that point.
-
-To reproduce the labeled input CSV, run the preparation script:
-
-```powershell
+```bash
 python -m src.prepare_finfact
+python -m src.preprocess
+python -m src.train --model all
+python -m src.evaluate
+python app.py
 ```
 
-It creates [data/raw/finfact_claims.csv](data/raw/finfact_claims.csv) with
-`article`, `label`, and `source_url` columns. The `article` column contains the
-dataset's claim/headline text for compatibility with the current text-model
-pipeline. The older [header-only template](data/raw/financial_news_template.csv)
-is for user-provided data; it is not training data. Do not put
-FiQA/PhraseBank sentiment labels in the fake/real label column.
+The data-preparation command downloads Fin-Fact JSON to `data/raw/finfact.json` when it is missing, then writes `data/raw/finfact_claims.csv` with `article,label,source_url` columns. It accepts `--input` and `--output` paths.
 
-## Preprocess
+Preprocessing normalizes labels, lowercases and cleans claim text into `tfidf_text`, drops empty/duplicate claims and claims with conflicting verdicts, and creates stratified 70/15/15 train/validation/test splits using seed 42. Each split has `text,label,tfidf_text` columns. Override paths and the seed using `python -m src.preprocess --help`.
 
-If your data uses different column names, replace `article` and `label` below
-with the real column names. Omit `--label-map` for recognized text labels such
-as `REAL` and `FAKE`; specify a mapping only when the source's documentation
-confirms the numeric label meanings.
+Training fits TF-IDF (unigrams and bigrams) pipelines with Logistic Regression, Complement Naive Bayes, Bayesian Logistic Regression (MAP with a diagonal Laplace posterior approximation), a linear SVM, CART, AdaBoost, and a soft-voting ensemble. Validation macro-F1 is printed and models are stored in `models/*.joblib`. Select one with `--model logistic`, `--model svm`, `--model cart`, `--model boosting`, `--model ensemble`, or another listed by `python -m src.train --help`.
 
-```powershell
-python -m src.preprocess `
-  --input data/raw/finfact_claims.csv `
-  --text-column article `
-  --label-column label `
-  --output-dir data/processed `
-  --seed 42
-```
+Evaluation computes test accuracy, FAKE precision/recall/F1, macro-F1, ROC-AUC, confusion matrices, and mean per-claim inference latency after warmups and repeated measurements (up to 100 test claims). It writes `reports/metrics.csv`, `reports/metrics.json`, `reports/confusion_<model>.csv`, and `reports/f1_vs_latency.png`. Metrics are produced from the data and trained models; no results are hard-coded.
 
-The [preprocessing pipeline](src/preprocess.py) reads the labeled source through
-the [CSV loader](src/data_loader.py) and creates
-`data/processed/train.csv`, `data/processed/val.csv`, and
-`data/processed/test.csv`. Each generated split contains `text`, normalized
-`label`, and `tfidf_text` columns. Splits are stratified and use a fixed seed;
-duplicates and empty records are removed before splitting. These files are
-generated from your populated source and are intentionally not checked in.
-FinBERT reads `text`; the classical models read `tfidf_text`.
+The Flask app runs at [http://127.0.0.1:5000](http://127.0.0.1:5000). A trained model is required for predictions. It can also be started through a WSGI server by importing `app` from `app.py`; `create_app()` provides an independently configured application instance for tests and deployments.
 
-## Train all models
+The startup settings can be overridden with environment variables:
 
-Classical TF-IDF Logistic Regression and XGBoost read
-`data/processed/train.csv`:
+| Variable | Default | Description |
+|---|---|---|
+| `VERIFINVERSE_HOST` | `127.0.0.1` | Address used by the built-in development server. |
+| `VERIFINVERSE_PORT` | `5000` | Port used by the built-in development server (1–65535). |
+| `VERIFINVERSE_DEBUG` | `false` | Enables Flask debug mode when set to `true`, `1`, `yes`, or `on`. |
+| `VERIFINVERSE_LOG_LEVEL` | `INFO` | Python logging level, such as `INFO` or `WARNING`. |
+| `VERIFINVERSE_MODEL_DIR` | `models` | Directory containing trained `.joblib` models. |
+| `VERIFINVERSE_DATASET_PATH` | `data/raw/finfact_claims.csv` | Dataset used by the API and workbench. |
+| `VERIFINVERSE_HISTORY_PATH` | `data/history.csv` | CSV file used to store successful predictions. |
 
-```powershell
-python -m src.train_classical --model all
-```
+Relative file paths are resolved from the repository root. Request logs include the HTTP method, path, status code, and elapsed time; query parameters and request bodies are not logged.
 
-The [FinBERT training script](src/train_finbert.py) reads the same
-`train.csv` plus `val.csv`. Adjust epochs, maximum token length, and batch size
-for your hardware:
+## API
 
-```powershell
-python -m src.train_finbert --epochs 2 --max-length 128 --batch-size 8
-```
+- `GET /` — serves the browser interface.
+- `GET /api/v1/models` — returns the model names present in the configured model directory.
+- `POST /api/v1/predict` — accepts `{"text":"...","model":"logistic"}` and returns `verdict`, `confidence`, `probabilities`, `signals`, `known_words`, and `latency_ms`. Empty text or text longer than 1,000 characters returns HTTP 400; an unavailable model name returns HTTP 404. Successful predictions are appended to the configured history CSV.
+- `POST /api/v1/predict/all` — accepts `{"text":"..."}` and returns the same prediction and explanation fields for every available model in a `results` array. The browser uses this route to compare all model verdicts and confidence values; successful results are recorded individually in history.
+- `GET /api/v1/history?limit=20` — returns the newest history rows first; `limit` is capped at 200.
 
-Artifacts are written to `models/`. FinBERT automatically uses CUDA when
-available and CPU otherwise.
+The versioned API also includes `/api/v1/algorithms`, `/api/v1/algorithms/run`, and `/api/v1/dataset/summary`. The previous unversioned JSON routes remain available as compatibility aliases.
 
-## Evaluate
+For linear models, a signal is a vectorizer feature's TF-IDF value multiplied by its model weight (for Complement Naive Bayes, the difference between FAKE and REAL log-probability weights). Positive contributions push toward FAKE; negative contributions push toward REAL. For CART, boosting, and the voting ensemble, signals are single-feature probability changes relative to an empty feature vector and do not capture interactions. Features may include bigrams as well as individual words.
 
-The [evaluation script](src/evaluate.py) reads `data/processed/test.csv` by
-default and computes accuracy, precision, recall, F1, ROC-AUC, confusion
-matrices, and measured mean per-article inference latency. Latency uses warmups
-and repeated model calls on up to 100 test articles; it excludes SHAP
-computation. Metrics are derived from the supplied test split and saved as
-CSV/JSON; no results are pre-populated.
+## Algorithm workbench
 
-```powershell
-python -m src.evaluate --models logistic xgboost finbert --warmups 3 --latency-repeats 3
-```
+Open `/workbench` to inspect the loaded Fin-Fact CSV and run the algorithm demonstrations. `GET /dataset/summary` reports dataset counts and descriptive text statistics. `GET /algorithms` lists demonstrations; `POST /algorithms/run` accepts `{"algorithm":"kmeans"}` and returns computed output. The workbench includes polynomial curve fitting, linear regression, Bayesian model averaging, boosting, CART, GAM, soft-voting ensemble learning, K-Means, Gaussian mixture, hierarchical clustering, and PCA. Regression and unsupervised demonstrations use numeric features derived from claim length, token diversity, digits, and punctuation; clustering does not use verdict labels.
 
-Reports are saved to `reports/`: `metrics.csv`, `metrics.json`, one confusion
-matrix per model, and `f1_vs_latency.png` (F1/latency trade-off).
-
-## Run the application
-
-Start FastAPI (from this directory):
-
-```powershell
-uvicorn api.main:app --reload
-```
-
-Open `http://127.0.0.1:8000` for the HTML/CSS/JavaScript interface or
-`http://127.0.0.1:8000/docs` for the API documentation. The interface and API
-are served from the same Python/FastAPI process. `GET /models` lists trained
-artifacts, `POST /predict` accepts `{"text":"...","model":"logistic"}`, and
-`GET /history?limit=20` reads recent analyses from MySQL. Prediction results
-include the verdict, confidence, SHAP signals, and latency. This model predicts
-from claim/headline text and does not independently verify sources or current
-facts.
-
-## Notes
-
-- `REAL` is class 0 and `FAKE` is class 1 throughout training and evaluation.
-- Use a source-appropriate split or group by publisher/time if near-duplicate
-  articles or source leakage are concerns; a random stratified split alone
-  cannot guarantee independent sources.
-- SHAP feature contributions explain model behavior, not factual verification.
-- XGBoost and SHAP performance can vary by platform and package version. FinBERT
-  fine-tuning on CPU may be slow; reduce batch size or epochs for a laptop.
+The HMM demo runs the forward, backward, and Viterbi algorithms on a small illustrative two-state HMM because Fin-Fact claims are independent records, not time-ordered observations. The linear regression and polynomial fit use binary labels as a numeric target and are demonstrations, not suitable REAL/FAKE classifiers. Bayesian model averaging uses a simple equal-prior posterior approximation based on validation log scores, not a fully specified Bayesian prior over data-generating models. Dataset loading is available from CSV with `python -m src.algorithms --input path/to/claims.csv --algorithm all`.

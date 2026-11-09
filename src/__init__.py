@@ -1,1 +1,1 @@
-"""VeriFinVerse machine-learning pipeline."""
+"""VeriFinVerse data and model pipeline."""

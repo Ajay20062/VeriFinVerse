@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Explainable wording-based classification of short financial claims.">
+    <title>VeriFinVerse | Claim analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="site-header">
+        <div class="brand-mark" aria-hidden="true">V</div>
+        <div>
+          <p class="eyebrow">FINANCIAL CLAIM CLASSIFIER</p>
+          <h1>VeriFinVerse</h1>
+        </div>
+        <a class="header-link" href="/workbench">Algorithm workbench <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">A closer look at the wording</p>
+        <h2>Explore a financial claim.</h2>
+        <p>Compare predictions from every trained model, then inspect the wording signals behind one model's result.</p>
+      </section>
+
+      <section class="analysis-card" aria-labelledby="analyze-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / INPUT</p>
+            <h2 id="analyze-title">Analyze a claim</h2>
+          </div>
+          <span class="character-limit">Up to 1,000 characters</span>
+        </div>
+        <label for="claim-text">Claim or headline</label>
+        <textarea id="claim-text" maxlength="1000" placeholder="Paste or type a financial claim..." rows="5"></textarea>
+        <div class="form-actions">
+          <label class="model-picker" for="model-select">
+            <span>Feature explanation model</span>
+            <select id="model-select" aria-label="Choose a model"></select>
+          </label>
+          <button id="analyze-button" type="button">Compare models <span aria-hidden="true">→</span></button>
+        </div>
+        <p id="error-message" class="error-message" role="alert" hidden></p>
+      </section>
+
+      <section id="comparison-section" class="history-card" aria-labelledby="comparison-title" aria-live="polite" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 / MODEL COMPARISON</p>
+            <h2 id="comparison-title">Each model's answer</h2>
+          </div>
+        </div>
+        <div id="model-results" class="model-results"></div>
+      </section>
+
+      <section id="result-section" class="result-grid" aria-live="polite" hidden>
+        <article class="result-card verdict-card">
+          <p class="eyebrow">03 / SELECTED MODEL</p>
+          <h2 id="explanation-model-title">Feature explanation</h2>
+          <p id="verdict" class="verdict-label"></p>
+          <div class="confidence-heading">
+            <span>Confidence</span>
+            <strong id="confidence-value"></strong>
+          </div>
+          <div class="confidence-track" aria-label="Confidence">
+            <div id="confidence-bar" class="confidence-fill"></div>
+          </div>
+          <div class="probability-row"><span>REAL</span><strong id="real-probability"></strong></div>
+          <div class="probability-row"><span>FAKE</span><strong id="fake-probability"></strong></div>
+          <p id="known-words" class="muted-copy"></p>
+          <p id="latency" class="latency-copy"></p>
+        </article>
+        <article class="result-card signals-card">
+          <p class="eyebrow">03 / WORDING SIGNALS</p>
+          <h2>Features that influenced the model</h2>
+          <p class="muted-copy">Positive values push toward FAKE; negative values push toward REAL.</p>
+          <div id="signals" class="signals-list"></div>
+        </article>
+      </section>
+
+      <section class="history-card" aria-labelledby="history-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">04 / RECENT ACTIVITY</p>
+            <h2 id="history-title">Recent claims</h2>
+          </div>
+          <button id="refresh-history" class="text-button" type="button">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Claim</th><th>Model</th><th>Verdict</th><th>Confidence</th><th>Latency</th></tr>
+            </thead>
+            <tbody id="history-rows"></tbody>
+          </table>
+        </div>
+        <p id="history-empty" class="muted-copy">No analyses yet.</p>
+      </section>
+
+      <footer>
+        <p><strong>Important:</strong> VeriFinVerse classifies short-claim wording based on learned patterns. It does not verify full articles or current facts, is not financial advice, and is not an authoritative fact-checking service. Explanations describe the model, not the facts. A confidence near 50% means the model is unsure.</p>
+      </footer>
+    </main>
+  </body>
+</html>

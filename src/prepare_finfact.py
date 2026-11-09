@@ -1,68 +1,63 @@
-"""Download Fin-Fact and prepare its verified binary claim labels."""
+"""Download Fin-Fact JSON and export binary fact-check claims to CSV."""
 
+import argparse
 import json
 from pathlib import Path
 from urllib.request import urlopen
 
 import pandas as pd
 
+SOURCE_URL = "https://raw.githubusercontent.com/IIT-DM/Fin-Fact/FinFact/finfact.json"
+DEFAULT_INPUT = Path("data/raw/finfact.json")
+DEFAULT_OUTPUT = Path("data/raw/finfact_claims.csv")
 
-SOURCE_URL = (
-    "https://raw.githubusercontent.com/IIT-DM/Fin-Fact/refs/heads/FinFact/"
-    "finfact.json"
-)
-OUTPUT_PATH = Path("data/raw/finfact_claims.csv")
-LABEL_MAP = {"true": "REAL", "false": "FAKE"}
+
+def prepare(input_path: Path, output_path: Path) -> pd.DataFrame:
+    if not input_path.exists():
+        input_path.parent.mkdir(parents=True, exist_ok=True)
+        with urlopen(SOURCE_URL, timeout=60) as response:
+            input_path.write_bytes(response.read())
+
+    with input_path.open("r", encoding="utf-8") as source:
+        records = json.load(source)
+    if isinstance(records, dict):
+        records = records.get("data", records.get("records", []))
+    if not isinstance(records, list):
+        raise ValueError("Fin-Fact JSON must contain a list of records.")
+
+    rows = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        label = str(record.get("label", "")).strip().lower()
+        if label not in {"true", "false"}:
+            continue
+        claim = record.get("claim")
+        if claim is None or not str(claim).strip():
+            continue
+        rows.append(
+            {
+                "article": str(claim).strip(),
+                "label": "REAL" if label == "true" else "FAKE",
+                "source_url": str(record.get("url") or "").strip(),
+            }
+        )
+
+    frame = pd.DataFrame(rows, columns=["article", "label", "source_url"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(output_path, index=False)
+    counts = frame["label"].value_counts().to_dict() if not frame.empty else {}
+    print(f"Wrote {len(frame)} claims to {output_path}")
+    print(f"Label counts: REAL={counts.get('REAL', 0)}, FAKE={counts.get('FAKE', 0)}")
+    return frame
 
 
 def main() -> None:
-    with urlopen(SOURCE_URL, timeout=60) as response:
-        records = json.load(response)
-    if not isinstance(records, list) or not records:
-        raise ValueError("Fin-Fact source returned no records")
-
-    frame = pd.DataFrame(records)
-    required = {"claim", "label", "url"}
-    if not required.issubset(frame.columns):
-        raise ValueError(f"Fin-Fact records must include {sorted(required)}")
-
-    frame["article"] = frame["claim"].astype("string").str.replace(
-        r"\s+", " ", regex=True
-    ).str.strip()
-    frame["source_label"] = frame["label"].astype("string").str.strip().str.casefold()
-    unknown = set(frame["source_label"].dropna().unique()) - {
-        "true",
-        "false",
-        "nei",
-    }
-    if unknown:
-        raise ValueError(f"Unexpected Fin-Fact labels: {sorted(unknown)}")
-
-    nei_count = int((frame["source_label"] == "nei").sum())
-    frame = frame[frame["source_label"].isin(LABEL_MAP)].copy()
-    frame["label"] = frame["source_label"].map(LABEL_MAP)
-    frame["source_url"] = frame["url"].astype("string").str.strip()
-    frame = frame.dropna(subset=["article", "source_url"])
-    frame = frame[(frame["article"] != "") & (frame["source_url"] != "")]
-
-    frame["_key"] = frame["article"].str.casefold()
-    conflicting = frame.groupby("_key")["label"].nunique()
-    conflicting_keys = set(conflicting[conflicting > 1].index)
-    frame = frame[~frame["_key"].isin(conflicting_keys)]
-    frame = frame.drop_duplicates("_key")
-
-    frame = frame[["article", "label", "source_url"]].reset_index(drop=True)
-    counts = frame["label"].value_counts()
-    if set(counts.index) != {"REAL", "FAKE"} or counts.min() < 3:
-        raise ValueError(f"Need at least three examples per class; got {counts.to_dict()}")
-
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(OUTPUT_PATH, index=False)
-    print(
-        f"Saved {len(frame)} labeled claims to {OUTPUT_PATH}; "
-        f"labels={counts.to_dict()}; excluded NEI={nei_count}; "
-        f"excluded conflicting duplicate claims={len(conflicting_keys)}"
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    args = parser.parse_args()
+    prepare(args.input, args.output)
 
 
 if __name__ == "__main__":

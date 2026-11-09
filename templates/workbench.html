@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Run and inspect classical machine-learning algorithms on the Fin-Fact CSV dataset.">
+    <title>VeriFinVerse | Algorithm workbench</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='workbench.js') }}" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="site-header">
+        <div class="brand-mark" aria-hidden="true">V</div>
+        <div>
+          <p class="eyebrow">CLASSICAL MACHINE LEARNING</p>
+          <h1>Algorithm workbench</h1>
+        </div>
+        <a class="header-link" href="/">Claim classifier <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">DATASET IMPORT / LOADING</p>
+        <h2>Explore the Fin-Fact CSV.</h2>
+        <p>Inspect dataset statistics and run learning demonstrations on numeric features derived from claim text. These experiments supplement—not replace—the short-claim classifier.</p>
+      </section>
+
+      <section class="history-card" aria-labelledby="dataset-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / DATASET SUMMARY</p>
+            <h2 id="dataset-title">Loaded dataset</h2>
+          </div>
+          <button id="refresh-dataset" class="text-button" type="button">Reload CSV</button>
+        </div>
+        <div id="dataset-stats" class="stats-grid"></div>
+        <p id="dataset-error" class="error-message" role="alert" hidden></p>
+      </section>
+
+      <section class="analysis-card workbench-card" aria-labelledby="algorithm-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 / ALGORITHM DEMO</p>
+            <h2 id="algorithm-title">Run a demonstration</h2>
+          </div>
+        </div>
+        <label for="algorithm-select">Algorithm</label>
+        <select id="algorithm-select"></select>
+        <p id="algorithm-description" class="muted-copy"></p>
+        <button id="run-algorithm" type="button">Run algorithm <span aria-hidden="true">→</span></button>
+        <p id="algorithm-error" class="error-message" role="alert" hidden></p>
+        <pre id="algorithm-result" class="algorithm-result" aria-live="polite"></pre>
+      </section>
+
+      <section class="history-card" aria-labelledby="catalog-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 / CATALOG</p>
+            <h2 id="catalog-title">Included algorithms</h2>
+          </div>
+        </div>
+        <ul id="algorithm-catalog" class="algorithm-catalog"></ul>
+      </section>
+
+      <footer>
+        <p><strong>Interpret results carefully:</strong> regression treats binary labels as a numeric target; clustering and PCA use derived claim-text measurements, not fact verification. The HMM example uses illustrative parameters because Fin-Fact has no sequential observations. This workbench is not financial advice or an authoritative fact-checking service.</p>
+      </footer>
+    </main>
+  </body>
+</html>
